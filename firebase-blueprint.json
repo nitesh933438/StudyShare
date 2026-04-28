@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "Resource": {
+      "title": "Study Resource",
+      "description": "A document, notes, or assignment uploaded by users",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "course": { "type": "string" },
+        "branch": { "type": "string" },
+        "subject": { "type": "string" },
+        "type": { "type": "string" },
+        "author": { "type": "string" },
+        "date": { "type": "string" },
+        "downloads": { "type": "number" },
+        "averageRating": { "type": "number" },
+        "ratingCount": { "type": "number" },
+        "description": { "type": "string" },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "fileUrl": { "type": "string" }
+      },
+      "required": ["title", "course", "branch", "subject", "type", "author", "date"]
+    },
+    "Rating": {
+      "title": "Resource Rating",
+      "description": "A rating given by a user to a specific resource",
+      "type": "object",
+      "properties": {
+        "rating": { "type": "number", "description": "1 to 5 stars" },
+        "userId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["rating", "userId", "timestamp"]
+    },
+    "Notice": {
+      "title": "Public Notice",
+      "description": "An announcement posted by any user",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "description": "Subject of the notice" },
+        "message": { "type": "string", "description": "Content of the notice" },
+        "name": { "type": "string", "description": "Name of the person posting" },
+        "timestamp": { "type": "string", "format": "date-time", "description": "When it was posted" }
+      },
+      "required": ["title", "message", "name", "timestamp"]
+    },
+    "DownloadRecord": {
+      "title": "Download Record",
+      "description": "History of a resource downloaded by a user",
+      "type": "object",
+      "properties": {
+        "resourceId": { "type": "string" },
+        "resourceTitle": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["resourceId", "resourceTitle", "timestamp"]
+    },
+    "Bookmark": {
+      "title": "Resource Bookmark",
+      "description": "A saved resource for later reference",
+      "type": "object",
+      "properties": {
+        "resourceId": { "type": "string" },
+        "resourceTitle": { "type": "string" },
+        "fileUrl": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["resourceId", "resourceTitle", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/resources/{resourceId}": {
+      "schema": "Resource",
+      "description": "Collection of study materials"
+    },
+    "/resources/{resourceId}/ratings/{userId}": {
+      "schema": "Rating",
+      "description": "Sub-collection of user ratings for a specific resource"
+    },
+    "/notices/{noticeId}": {
+      "schema": "Notice",
+      "description": "Collection of public announcements"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "Real-time system notifications"
+    },
+    "/users/{userId}/downloads/{downloadId}": {
+      "schema": "DownloadRecord",
+      "description": "User specific download history"
+    },
+    "/users/{userId}/bookmarks/{resourceId}": {
+      "schema": "Bookmark",
+      "description": "User specific bookmarked resources"
+    }
+  }
+}

@@ -1,0 +1,147 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email_verified == true && request.auth.token.email == 'nitesh933438@gmail.com') ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    // Notices Validation
+    function isValidNotice(data) {
+      return data.keys().hasAll(['title', 'message', 'name', 'timestamp']) &&
+             data.keys().size() == 4 &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 100 &&
+             data.message is string && data.message.size() > 0 && data.message.size() <= 500 &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 50 &&
+             data.timestamp == request.time;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll(['type', 'title', 'message', 'timestamp', 'read']) &&
+             data.keys().size() == 5 &&
+             data.type in ['login', 'logout', 'upload', 'download', 'notice', 'admin'] &&
+             data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+             data.message is string && data.message.size() > 0 && data.message.size() <= 1000 &&
+             data.read is bool &&
+             data.timestamp == request.time;
+    }
+
+    function isValidRating(data) {
+      return data.keys().hasAll(['rating', 'userId', 'timestamp']) &&
+             data.keys().size() == 3 &&
+             data.rating is number && data.rating >= 1 && data.rating <= 5 &&
+             data.userId == request.auth.uid &&
+             data.timestamp == request.time;
+    }
+
+    function isValidDownload(data) {
+      return data.keys().hasAll(['resourceId', 'resourceTitle', 'fileUrl', 'timestamp']) &&
+             data.resourceId is string &&
+             data.resourceTitle is string &&
+             data.timestamp == request.time;
+    }
+
+    function isValidBookmark(data) {
+      return data.keys().hasAll(['resourceId', 'resourceTitle', 'fileUrl', 'timestamp']) &&
+             data.resourceId is string &&
+             data.resourceTitle is string &&
+             data.timestamp == request.time;
+    }
+
+    // Notices Collection
+    match /notices/{noticeId} {
+      allow read: if true;
+      allow create: if isValidNotice(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+    
+    function isValidResource(data) {
+      return data.keys().hasAll(['title', 'course', 'branch', 'subject', 'type', 'author', 'date']) &&
+             data.title is string && data.title.size() <= 200 &&
+             data.course is string &&
+             data.branch is string &&
+             data.subject is string &&
+             data.type is string &&
+             data.author is string &&
+             data.date is string &&
+             (!('semester' in data) || (data.semester is string && data.semester.size() <= 50)) &&
+             (!('academicYear' in data) || (data.academicYear is string && data.academicYear.size() <= 50)) &&
+             (!('tags' in data) || (data.tags is list && data.tags.size() <= 10)) &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('fileUrl' in data) || (data.fileUrl is string && data.fileUrl.size() <= 1000)) &&
+             (!('fileType' in data) || (data.fileType is string && data.fileType.size() <= 20)) &&
+             (!('id' in data) || (data.id is string)) &&
+             (!('timestamp' in data) || (data.timestamp == request.time || data.timestamp == null)) &&
+             (!('downloads' in data) || (data.downloads is number)) &&
+             (!('averageRating' in data) || (data.averageRating is number)) &&
+             (!('ratingCount' in data) || (data.ratingCount is number));
+    }
+
+    match /resources/{resourceId} {
+      allow read: if true;
+      allow create: if isAdmin() || (isSignedIn() && isValidResource(request.resource.data));
+      allow delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isSignedIn() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['averageRating', 'ratingCount', 'downloads', 'tags']) &&
+        isValidResource(request.resource.data)
+      );
+
+      match /ratings/{userId} {
+        allow read: if true;
+        allow create: if isSignedIn() && userId == request.auth.uid && isValidRating(request.resource.data);
+        allow update: if isSignedIn() && userId == request.auth.uid && isValidRating(request.resource.data) &&
+                     request.resource.data.diff(resource.data).affectedKeys().hasOnly(['rating', 'timestamp']);
+        allow delete: if isAdmin() || (isSignedIn() && userId == request.auth.uid);
+      }
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isAdmin() || (isSignedIn() && request.auth.uid == userId && 
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']));
+      allow delete: if isAdmin();
+
+      match /downloads/{downloadId} {
+        allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+        allow create: if isSignedIn() && request.auth.uid == userId && isValidDownload(request.resource.data);
+      }
+
+      match /activity/{activityId} {
+        allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+        allow create: if isSignedIn() && request.auth.uid == userId;
+      }
+
+      match /bookmarks/{resourceId} {
+        allow read: if isAdmin() || (isSignedIn() && request.auth.uid == userId);
+        allow create, delete: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if true;
+      allow create: if isValidNotification(request.resource.data);
+      allow update: if isAdmin() || (isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']));
+      allow delete: if isSignedIn();
+    }
+  }
+}
